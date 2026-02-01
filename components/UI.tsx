@@ -43,7 +43,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
       <input
         ref={ref}
         className={clsx(
-          "w-full px-4 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-400 transition-all bg-[#F8FAFC]",
+          "w-full px-4 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-400 transition-all bg-slate-50",
           error ? "border-red-300 bg-red-50/50" : "border-slate-200",
           className
         )}
@@ -61,7 +61,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
       <select
         ref={ref}
         className={clsx(
-          "w-full px-4 py-2.5 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-400 transition-all bg-[#F8FAFC] cursor-pointer",
+          "w-full px-4 py-2.5 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-400 transition-all bg-slate-50 cursor-pointer",
           className
         )}
         {...props}

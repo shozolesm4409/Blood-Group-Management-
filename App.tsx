@@ -2,7 +2,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Layout from './components/Layout';
+import { Layout } from './components/Layout';
 import { Login, Register } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { Profile } from './pages/Profile';
