@@ -60,10 +60,9 @@ export const UserManagement = () => {
     if (!currentUser || currentUser.role !== UserRole.ADMIN) return;
     try {
       await updateUserProfile(uid, { role: newRole }, currentUser);
-      alert(`User role successfully changed to ${newRole}.`);
+      alert(`User role updated to ${newRole} successfully.`);
       fetchData();
     } catch (e) {
-      console.error("Failed to change role", e);
       alert("Error changing user role.");
     }
   };
@@ -74,9 +73,8 @@ export const UserManagement = () => {
     const formData = new FormData(e.currentTarget);
     const newPass = formData.get('newPassword') as string;
     await adminForceChangePassword(uid, newPass, currentUser);
-    alert("User access PIN has been force-reset successfully.");
+    alert("User password has been force-reset.");
     setShowPwdModal(null);
-    fetchData();
   };
 
   const handleEditUserSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -94,11 +92,10 @@ export const UserManagement = () => {
 
     try {
       await updateUserProfile(editUser.id, updates, currentUser);
-      alert("User profile details successfully updated.");
+      alert("User profile updated successfully.");
       setEditUser(null);
       fetchData();
     } catch (err) {
-      console.error("Failed to update user", err);
       alert("Failed to update user profile.");
     } finally {
       setEditLoading(false);
@@ -110,11 +107,10 @@ export const UserManagement = () => {
     setIsDeleting(true);
     try {
       await deleteUserRecord(deleteUserId, currentUser);
-      alert("Account data has been successfully moved to the archives.");
+      alert("User account has been archived and deleted.");
       fetchData();
       setDeleteUserId(null);
     } catch (e) {
-      console.error("Failed to delete user", e);
       alert("Error deleting user.");
     } finally {
       setIsDeleting(false);
@@ -124,18 +120,15 @@ export const UserManagement = () => {
   const handleSavePerms = async () => {
     if (!perms || !currentUser || currentUser.role !== UserRole.ADMIN) return;
     setSavingPerms(true);
-    setPermWarning(null);
     try {
       const result = await updateAppPermissions(perms, currentUser);
       if (result.synced) {
-        alert("Permissions successfully synchronized to Cloud Registry.");
+        alert("System permissions synced to cloud successfully.");
       } else {
-        setPermWarning(result.error || "Local Sync Only.");
-        alert("Configuration saved locally. Cloud sync failed.");
+        alert("Permissions saved locally (Cloud sync blocked).");
       }
     } catch (err: any) {
-      console.error("Save error", err);
-      alert(err.message || "Critical error during rule synchronization.");
+      alert(err.message || "Critical error during rule sync.");
     } finally {
       setSavingPerms(false);
     }
@@ -156,14 +149,18 @@ export const UserManagement = () => {
 
   const handleAccessAction = async (userId: string, type: 'directory' | 'support', approve: boolean) => {
     if (!currentUser) return;
-    if (type === 'directory') await handleDirectoryAccess(userId, approve, currentUser);
-    else await handleSupportAccess(userId, approve, currentUser);
-    alert(`${type.charAt(0).toUpperCase() + type.slice(1)} access has been ${approve ? 'granted' : 'revoked'}.`);
-    fetchData();
+    try {
+      if (type === 'directory') await handleDirectoryAccess(userId, approve, currentUser);
+      else await handleSupportAccess(userId, approve, currentUser);
+      alert(`${type === 'directory' ? 'Directory' : 'Support'} access ${approve ? 'granted' : 'rejected'}.`);
+      fetchData();
+    } catch (e) {
+      alert("Action failed.");
+    }
   };
 
   const canManagePerms = currentUser?.role === UserRole.ADMIN;
-  const pendingRequestsCount = users.filter(u => u.directoryAccessRequested || u.supportAccessRequested).length;
+  const pendingRequests = users.filter(u => u.directoryAccessRequested || u.supportAccessRequested);
 
   return (
     <div className="space-y-6">
@@ -205,9 +202,9 @@ export const UserManagement = () => {
             )}
           >
             Permissions
-            {pendingRequestsCount > 0 && (
+            {pendingRequests.length > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[8px] text-white animate-pulse">
-                {pendingRequestsCount}
+                {pendingRequests.length}
               </span>
             )}
           </button>
@@ -216,32 +213,32 @@ export const UserManagement = () => {
 
       {activeTab === 'directory-access' && (
         <Card className="p-8 shadow-lg border-0 space-y-8">
-          {pendingRequestsCount > 0 && (
-            <div className="bg-red-50/50 rounded-3xl p-6 border border-red-100">
-               <h3 className="font-black text-[10px] text-red-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                 <BellRing size={16} /> Outstanding Auth Requests
-               </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {users.filter(u => u.directoryAccessRequested || u.supportAccessRequested).map(u => (
-                   <div key={u.id} className="p-4 bg-white rounded-2xl border border-slate-100 flex items-center justify-between gap-4 group hover:shadow-md transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
-                          {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-300" />}
-                        </div>
-                        <div>
-                           <p className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{u.name}</p>
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                             {u.directoryAccessRequested ? 'Directory' : 'Support'} Req
-                           </p>
-                        </div>
+          {pendingRequests.length > 0 && (
+            <div className="bg-red-50 border border-red-100 rounded-3xl p-6">
+              <h3 className="font-black text-[10px] text-red-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <BellRing size={16} /> Outstanding Auth Requests
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pendingRequests.map(u => (
+                  <div key={u.id} className="bg-white p-4 rounded-2xl border border-red-100 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 border overflow-hidden">
+                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-300" />}
                       </div>
-                      <div className="flex gap-1.5">
-                        <button onClick={() => handleAccessAction(u.id, u.directoryAccessRequested ? 'directory' : 'support', true)} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"><Check size={14} /></button>
-                        <button onClick={() => handleAccessAction(u.id, u.directoryAccessRequested ? 'directory' : 'support', false)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"><X size={14} /></button>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{u.name}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase">
+                          {u.directoryAccessRequested ? 'Directory' : 'Support'} Req
+                        </p>
                       </div>
-                   </div>
-                 ))}
-               </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => handleAccessAction(u.id, u.directoryAccessRequested ? 'directory' : 'support', true)} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"><Check size={14} /></button>
+                      <button onClick={() => handleAccessAction(u.id, u.directoryAccessRequested ? 'directory' : 'support', false)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"><X size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -251,7 +248,7 @@ export const UserManagement = () => {
             </div>
             <div>
               <h3 className="font-bold text-xl text-slate-900">Privileged Account Directory</h3>
-              <p className="text-xs text-slate-500">Live directory of accounts authorized for multi-collection visibility.</p>
+              <p className="text-xs text-slate-500">Live directory of authorized users with extended permissions.</p>
             </div>
           </div>
           
@@ -259,11 +256,11 @@ export const UserManagement = () => {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 border-b text-[10px] text-slate-500 font-black uppercase tracking-widest">
                 <tr>
-                  <th className="px-6 py-4">Identity</th>
+                  <th className="px-6 py-4">User</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Directory</th>
                   <th className="px-6 py-4">Support</th>
-                  <th className="px-6 py-4 text-right">Revoke Access</th>
+                  <th className="px-6 py-4 text-right">Revoke</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -274,28 +271,19 @@ export const UserManagement = () => {
                          <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100">
                            {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-400" size={14} />}
                          </div>
-                         <div className="min-w-0">
-                           <p className="font-bold text-slate-900 truncate">{u.name}</p>
-                           <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
-                         </div>
+                         <p className="font-bold text-slate-900">{u.name}</p>
                        </div>
                     </td>
-                    <td className="px-6 py-4">
-                       <Badge color={u.role === UserRole.EDITOR ? 'blue' : 'gray'}>{u.role}</Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                       {u.hasDirectoryAccess ? <Badge color="green">Authorized</Badge> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="px-6 py-4">
-                       {u.hasSupportAccess ? <Badge color="blue">Active</Badge> : <span className="text-slate-300">-</span>}
-                    </td>
+                    <td className="px-6 py-4"><Badge color="gray">{u.role}</Badge></td>
+                    <td className="px-6 py-4">{u.hasDirectoryAccess ? <Badge color="green">Granted</Badge> : '-'}</td>
+                    <td className="px-6 py-4">{u.hasSupportAccess ? <Badge color="blue">Active</Badge> : '-'}</td>
                     <td className="px-6 py-4 text-right">
-                       <div className="flex justify-end gap-3">
+                       <div className="flex justify-end gap-2">
                          {u.hasDirectoryAccess && u.role !== UserRole.ADMIN && (
                            <button onClick={() => handleAccessAction(u.id, 'directory', false)} className="text-red-600 text-[10px] font-black uppercase hover:underline">Revoke Dir</button>
                          )}
-                         {u.hasSupportAccess && u.role !== UserRole.ADMIN && u.role !== UserRole.USER && (
-                           <button onClick={() => handleAccessAction(u.id, 'support', false)} className="text-blue-600 text-[10px] font-black uppercase hover:underline">Revoke Sup</button>
+                         {u.hasSupportAccess && u.role !== UserRole.ADMIN && (
+                           <button onClick={() => handleAccessAction(u.id, 'support', false)} className="text-red-600 text-[10px] font-black uppercase hover:underline">Revoke Sup</button>
                          )}
                        </div>
                     </td>
@@ -316,7 +304,6 @@ export const UserManagement = () => {
                   <th className="px-6 py-5">Profile</th>
                   <th className="px-6 py-5">Email</th>
                   <th className="px-6 py-5">Role</th>
-                  <th className="px-6 py-5">Access Pin</th>
                   <th className="px-6 py-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -350,9 +337,6 @@ export const UserManagement = () => {
                           <option value={UserRole.ADMIN}>Admin</option>
                         </select>
                       )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <code className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono font-bold text-xs">{(u as any).password || '••••••'}</code>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-1">
@@ -417,7 +401,7 @@ export const UserManagement = () => {
                   disabled={savingPerms}
                   className="w-full bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 disabled:opacity-50"
                 >
-                  {savingPerms ? 'Processing Rules...' : 'Synchronize Global Rules'}
+                  {savingPerms ? 'Processing...' : 'Synchronize Global Rules'}
                 </button>
               </div>
             )}
@@ -468,7 +452,7 @@ export const UserManagement = () => {
         onClose={() => setDeleteUserId(null)}
         onConfirm={confirmDeleteUser}
         title="Account Purge?"
-        message="Moving this account to the archive matrix. This is tracked in system logs."
+        message="Are you sure you want to delete this account? The action is recorded in audit logs."
         isLoading={isDeleting}
       />
     </div>
@@ -498,10 +482,9 @@ export const DirectoryPermissions = () => {
     try {
       if (type === 'directory') await handleDirectoryAccess(userId, approve, admin);
       else await handleSupportAccess(userId, approve, admin);
-      alert(`${approve ? 'Access Granted' : 'Access Denied'} successfully.`);
+      alert(`${approve ? 'Approved' : 'Rejected'} access successfully.`);
       fetchData();
     } catch (e) {
-      console.error(e);
       alert("Verification failed.");
     }
   };
@@ -510,10 +493,9 @@ export const DirectoryPermissions = () => {
     if (!admin) return;
     try {
       await updateDonationStatus(donationId, approve ? DonationStatus.COMPLETED : DonationStatus.REJECTED, admin);
-      alert(`Donation record ${approve ? 'Finalized' : 'Voided'} successfully.`);
+      alert(`Donation ${approve ? 'verified' : 'rejected'} successfully.`);
       fetchData();
     } catch (e) {
-      console.error(e);
       alert("Action failed.");
     }
   };
@@ -530,7 +512,7 @@ export const DirectoryPermissions = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Verification Hub</h1>
-          <p className="text-sm text-slate-500 font-medium">Authorization and record commit queue.</p>
+          <p className="text-sm text-slate-500 font-medium">Verify account access and donation requests.</p>
         </div>
       </div>
 
@@ -538,75 +520,67 @@ export const DirectoryPermissions = () => {
         <div className="space-y-6">
           <section className="space-y-4">
              <h3 className="font-black text-xs text-red-600 uppercase tracking-widest flex items-center gap-2">
-               <ShieldCheck size={16} /> Cross-Collection Auth
+               <ShieldCheck size={16} /> Directory Access Requests
              </h3>
              <div className="space-y-3">
                {pendingDir.map(u => (
                  <Card key={u.id} className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border-l-4 border-l-red-600 shadow-md">
                    <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                     <div className="w-12 h-12 rounded-full bg-slate-100 border flex items-center justify-center overflow-hidden flex-shrink-0">
                         {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="text-slate-300" />}
                      </div>
-                     <div className="text-center sm:text-left">
+                     <div>
                        <p className="font-bold text-slate-900">{u.name}</p>
                        <p className="text-xs text-slate-500">{u.email}</p>
                      </div>
                    </div>
-                   <div className="flex gap-2 w-full sm:w-auto">
-                      <button onClick={() => handleAction(u.id, 'directory', true)} className="flex-1 sm:flex-none bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Grant</button>
-                      <button onClick={() => handleAction(u.id, 'directory', false)} className="flex-1 sm:flex-none bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Reject</button>
+                   <div className="flex gap-2">
+                      <button onClick={() => handleAction(u.id, 'directory', true)} className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Grant</button>
+                      <button onClick={() => handleAction(u.id, 'directory', false)} className="bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Reject</button>
                    </div>
                  </Card>
                ))}
-               {pendingDir.length === 0 && (
-                 <Card className="p-10 text-center text-slate-400 bg-slate-50 border-dashed">
-                   <p className="text-sm italic">Access request queue is empty.</p>
-                 </Card>
-               )}
+               {pendingDir.length === 0 && <Card className="p-10 text-center text-slate-400 bg-slate-50 border-dashed">No pending directory requests.</Card>}
              </div>
           </section>
 
           <section className="space-y-4">
              <h3 className="font-black text-xs text-blue-600 uppercase tracking-widest flex items-center gap-2">
-               <LifeBuoy size={16} /> Live Support Authorization
+               <LifeBuoy size={16} /> Support Authorization
              </h3>
              <div className="space-y-3">
                {pendingSup.map(u => (
                  <Card key={u.id} className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border-l-4 border-l-blue-600 shadow-md">
                    <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                     <div className="w-12 h-12 rounded-full bg-slate-100 border flex items-center justify-center overflow-hidden flex-shrink-0">
                         {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-300" />}
                      </div>
-                     <div className="text-center sm:text-left">
+                     <div>
                        <p className="font-bold text-slate-900">{u.name}</p>
                        <p className="text-xs text-slate-500">{u.email}</p>
                      </div>
                    </div>
-                   <div className="flex gap-2 w-full sm:w-auto">
-                      <button onClick={() => handleAction(u.id, 'support', true)} className="flex-1 sm:flex-none bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Activate</button>
-                      <button onClick={() => handleAction(u.id, 'support', false)} className="flex-1 sm:flex-none bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Reject</button>
+                   <div className="flex gap-2">
+                      <button onClick={() => handleAction(u.id, 'support', true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Activate</button>
+                      <button onClick={() => handleAction(u.id, 'support', false)} className="bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-all">Reject</button>
                    </div>
                  </Card>
                ))}
-               {pendingSup.length === 0 && (
-                 <Card className="p-10 text-center text-slate-400 bg-slate-50 border-dashed">
-                   <p className="text-sm italic">No pending support requests.</p>
-                 </Card>
-               )}
+               {pendingSup.length === 0 && <Card className="p-10 text-center text-slate-400 bg-slate-50 border-dashed">No pending support requests.</Card>}
              </div>
           </section>
         </div>
 
         <section className="space-y-4">
            <h3 className="font-black text-xs text-orange-600 uppercase tracking-widest flex items-center gap-2">
-             <Droplet size={16} /> Field Record Commit
+             <Droplet size={16} /> Donation Approvals
            </h3>
            <div className="space-y-3">
              {pendingDonations.map(d => (
                <Card key={d.id} className="p-5 flex flex-col gap-4 border-l-4 border-l-orange-500 shadow-md">
                  <div className="flex items-center justify-between">
                    <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                     <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600">
                         <Droplet size={24} />
                      </div>
                      <div>
@@ -617,38 +591,17 @@ export const DirectoryPermissions = () => {
                    <Badge color="red">{d.userBloodGroup}</Badge>
                  </div>
                  
-                 <div className="bg-slate-50 p-4 rounded-xl flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Volume (mL)</p>
-                      <p className="text-sm font-bold">{d.units}ml</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</p>
-                      <p className="text-sm font-bold">{new Date(d.donationDate).toLocaleDateString()}</p>
-                    </div>
-                 </div>
-
                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleDonationApproval(d.id, true)} 
-                      className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
-                    >
-                      <Check size={14} /> Commit Record
+                    <button onClick={() => handleDonationApproval(d.id, true)} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
+                      <Check size={14} /> Approve
                     </button>
-                    <button 
-                      onClick={() => handleDonationApproval(d.id, false)} 
-                      className="flex-1 bg-white border border-slate-200 text-red-600 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
-                    >
-                      <X size={14} /> Void
+                    <button onClick={() => handleDonationApproval(d.id, false)} className="flex-1 bg-white border text-red-600 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
+                      <X size={14} /> Reject
                     </button>
                  </div>
                </Card>
              ))}
-             {pendingDonations.length === 0 && (
-               <Card className="p-20 text-center text-slate-400 bg-slate-50 border-dashed">
-                 <p className="text-sm italic">All field records are synchronized.</p>
-               </Card>
-             )}
+             {pendingDonations.length === 0 && <Card className="p-20 text-center text-slate-400 bg-slate-50 border-dashed">No pending donations.</Card>}
            </div>
         </section>
       </div>
@@ -663,21 +616,14 @@ export const ManageDonations = () => {
   const [filter, setFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [selectedDonorId, setSelectedDonorId] = useState('');
   const [deleteDonId, setDeleteDonId] = useState<string | null>(null);
 
   const fetchDonations = async () => {
     setLoading(true);
-    try {
-      const [dData, uData] = await Promise.all([getDonations(), getUsers()]);
-      setDonations(dData);
-      setUsers(uData);
-    } catch (e: any) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    const [dData, uData] = await Promise.all([getDonations(), getUsers()]);
+    setDonations(dData);
+    setUsers(uData);
+    setLoading(false);
   };
 
   useEffect(() => { fetchDonations(); }, []);
@@ -686,49 +632,46 @@ export const ManageDonations = () => {
     if (!user) return;
     try {
       await updateDonationStatus(id, status, user);
-      alert(`Donation status successfully updated to ${status}.`);
+      alert(`Donation status updated to ${status} successfully.`);
       fetchDonations();
     } catch (e) {
-      console.error("Failed to update status", e);
-      alert("Failed to update record.");
+      alert("Failed to update status.");
     }
   };
 
   const handleAddDonation = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) return;
-    setSubmitLoading(true);
     const formData = new FormData(e.currentTarget);
-    const userId = formData.get('userId') as string;
-    const selectedUser = users.find(u => u.id === userId);
+    const donorId = formData.get('userId') as string;
+    const selectedDonor = users.find(u => u.id === donorId);
 
-    if (selectedUser) {
+    if (selectedDonor) {
       try {
         await addDonation({
-          userId: selectedUser.id,
-          userName: selectedUser.name,
-          userBloodGroup: selectedUser.bloodGroup,
+          userId: selectedDonor.id,
+          userName: selectedDonor.name,
+          userBloodGroup: selectedDonor.bloodGroup,
           donationDate: formData.get('date') as string,
           location: formData.get('location') as string,
           units: Number(formData.get('units')),
-          status: formData.get('status') as DonationStatus,
-          notes: "Admin override"
+          status: DonationStatus.COMPLETED,
+          notes: "Manual override"
         }, user);
-        alert("New donation record has been successfully added to the registry.");
+        alert("New donation record added successfully.");
         setShowAddModal(false);
         fetchDonations();
       } catch (err) {
-        alert("Failed to add donation record.");
+        alert("Failed to add donation.");
       }
     }
-    setSubmitLoading(false);
   };
 
   const confirmDeleteDonation = async () => {
     if (!user || !deleteDonId) return;
     try {
       await deleteDonationRecord(deleteDonId, user);
-      alert("Donation record successfully archived.");
+      alert("Donation record deleted and archived.");
       setDeleteDonId(null);
       fetchDonations();
     } catch (err) {
@@ -741,42 +684,36 @@ export const ManageDonations = () => {
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Global Transaction Log</h1>
+        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Global Donation Ledger</h1>
         <div className="flex gap-2 w-full sm:w-auto">
           <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full sm:w-40 bg-white">
              <option value="ALL">Show All</option>
              <option value={DonationStatus.PENDING}>Pending</option>
              <option value={DonationStatus.COMPLETED}>Completed</option>
           </Select>
-          <Button onClick={() => setShowAddModal(!showAddModal)}>
-            <Plus className="w-4 h-4 mr-2" /> Commit Record
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Add Record
           </Button>
         </div>
       </div>
 
       {showAddModal && (
-        <Card className="p-8 bg-white border-slate-200 shadow-2xl border-t-4 border-red-500 animate-in zoom-in-95">
+        <Card className="p-8 bg-white border-t-4 border-red-500 shadow-2xl animate-in zoom-in-95">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-900 text-lg uppercase tracking-tight">Manual Registry Entry</h3>
-            <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
-              <X size={24} />
-            </button>
+            <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
           </div>
           <form onSubmit={handleAddDonation} className="space-y-4">
-             <Select label="Donor Selection" name="userId" required value={selectedDonorId} onChange={(e) => setSelectedDonorId(e.target.value)}>
-               <option value="">Locate hero...</option>
+             <Select label="Donor" name="userId" required>
+               <option value="">Select a donor...</option>
                {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.bloodGroup})</option>)}
              </Select>
              <div className="grid grid-cols-2 gap-4">
-               <Input label="Process Date" name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
+               <Input label="Date" name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
                <Input label="Volume (ml)" name="units" type="number" required defaultValue="450" />
              </div>
-             <Input label="Processing Facility" name="location" required placeholder="Hospital Center" />
-             <Select label="Sync Status" name="status" required defaultValue={DonationStatus.COMPLETED}>
-               <option value={DonationStatus.COMPLETED}>Finalized & Sync'd</option>
-               <option value={DonationStatus.PENDING}>Pending Auth</option>
-             </Select>
-             <Button type="submit" className="w-full py-4 mt-2" isLoading={submitLoading}>Commit to Registry</Button>
+             <Input label="Location" name="location" required placeholder="Facility name" />
+             <Button type="submit" className="w-full py-4 mt-2">Commit Record</Button>
           </form>
         </Card>
       )}
@@ -786,73 +723,35 @@ export const ManageDonations = () => {
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-900 text-[10px] text-white uppercase tracking-[0.2em] font-black">
               <tr>
-                <th className="px-6 py-5">Hero Profile</th>
-                <th className="px-6 py-5">Group</th>
-                <th className="px-6 py-5">Commit Date</th>
+                <th className="px-6 py-5">Donor</th>
+                <th className="px-6 py-5">Blood</th>
+                <th className="px-6 py-5">Date</th>
                 <th className="px-6 py-5">Status</th>
-                <th className="px-6 py-5 text-right">Approvals</th>
+                <th className="px-6 py-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(d => {
-                const donor = users.find(u => u.id === d.userId);
-                return (
-                  <tr key={d.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                       <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-full border-2 border-slate-50 overflow-hidden bg-slate-100 flex-shrink-0">
-                           {donor?.avatar ? <img src={donor.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-300" />}
-                         </div>
-                         <div>
-                           <p className="font-bold text-slate-900">{d.userName}</p>
-                           <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{d.location}</p>
-                         </div>
-                       </div>
-                    </td>
-                    <td className="px-6 py-4"><Badge color="red">{d.userBloodGroup}</Badge></td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(d.donationDate).toLocaleDateString()}</td>
-                    <td className="px-6 py-4">
-                      <Badge color={d.status === DonationStatus.COMPLETED ? 'green' : (d.status === DonationStatus.PENDING ? 'yellow' : 'red')}>
-                        {d.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-1">
-                        {d.status === DonationStatus.PENDING && (
-                          <button 
-                            onClick={() => handleStatusUpdate(d.id, DonationStatus.COMPLETED)}
-                            className="p-2.5 bg-green-50 text-green-600 hover:bg-green-600 hover:text-white rounded-xl transition-all shadow-sm"
-                            title="Confirm Transaction"
-                          >
-                            <Check size={16} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => setDeleteDonId(d.id)}
-                          className="p-2.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                          title="Purge Record"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-400 font-medium italic">No active ledger entries.</td></tr>
-              )}
+              {filtered.map(d => (
+                <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-900">{d.userName}</td>
+                  <td className="px-6 py-4"><Badge color="red">{d.userBloodGroup}</Badge></td>
+                  <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(d.donationDate).toLocaleDateString()}</td>
+                  <td className="px-6 py-4"><Badge color={d.status === DonationStatus.COMPLETED ? 'green' : 'yellow'}>{d.status}</Badge></td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-1">
+                      {d.status === DonationStatus.PENDING && (
+                        <button onClick={() => handleStatusUpdate(d.id, DonationStatus.COMPLETED)} className="p-2.5 bg-green-50 text-green-600 rounded-xl transition-all shadow-sm"><Check size={16} /></button>
+                      )}
+                      <button onClick={() => setDeleteDonId(d.id)} className="p-2.5 text-slate-300 hover:text-red-600 rounded-xl transition-all"><Trash2 size={16} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </Card>
-      <ConfirmModal 
-        isOpen={!!deleteDonId} 
-        onClose={() => setDeleteDonId(null)} 
-        onConfirm={confirmDeleteDonation} 
-        title="Wipe Ledger Entry?" 
-        message="This record will be moved to the archive matrix. Proceed?"
-      />
+      <ConfirmModal isOpen={!!deleteDonId} onClose={() => setDeleteDonId(null)} onConfirm={confirmDeleteDonation} title="Delete Record?" message="Archive and remove this record?" />
     </div>
   );
 };
@@ -860,74 +759,38 @@ export const ManageDonations = () => {
 export const SystemLogs = () => {
   const { user: admin } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [filterAction, setFilterAction] = useState('ALL');
-  
   useEffect(() => { getLogs().then(setLogs); }, []);
-
-  const getActionBadge = (action: string) => {
-    if (action.includes('LOGIN')) return <Badge color="green">Auth</Badge>;
-    if (action.includes('REGISTER')) return <Badge color="blue">Init</Badge>;
-    if (action.includes('DELETE')) return <Badge color="red">Purge</Badge>;
-    if (action.includes('UPDATE')) return <Badge color="yellow">Patch</Badge>;
-    return <Badge color="gray">{action}</Badge>;
-  };
-
   const handleDeleteLog = async (id: string) => {
     if (!admin) return;
     try {
       await deleteLogEntry(id, admin);
-      alert("Diagnostic entry successfully removed.");
+      alert("Audit entry deleted.");
       getLogs().then(setLogs);
-    } catch (e) { console.error(e); }
+    } catch (e) {}
   };
-
-  const filteredLogs = logs.filter(log => filterAction === 'ALL' || log.action.startsWith(filterAction));
-
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">System Diagnostic Registry</h1>
-        <Select value={filterAction} onChange={e => setFilterAction(e.target.value)} className="w-48 bg-white">
-           <option value="ALL">Global Feed</option>
-           <option value="LOGIN">Security</option>
-           <option value="DONATION">Ops</option>
-           <option value="USER">Directory</option>
-        </Select>
-      </div>
+      <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Diagnostic Registry</h1>
       <Card className="overflow-hidden border-0 shadow-xl bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-900 text-[10px] text-white uppercase tracking-[0.2em] font-black">
               <tr>
-                <th className="px-6 py-5">Timestamp</th>
                 <th className="px-6 py-5">Module</th>
                 <th className="px-6 py-5">Actor</th>
-                <th className="px-6 py-5">Diagnostic Response</th>
-                <th className="px-6 py-5 text-right">Purge</th>
+                <th className="px-6 py-5">Details</th>
+                <th className="px-6 py-5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredLogs.map(log => (
+              {logs.map(log => (
                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-slate-400 font-mono text-[10px] whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
-                  <td className="px-6 py-4">{getActionBadge(log.action)}</td>
-                  <td className="px-6 py-4">
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
-                          {log.userAvatar ? <img src={log.userAvatar} className="w-full h-full object-cover" /> : <Users className="p-1.5 text-slate-300" />}
-                        </div>
-                        <span className="font-bold text-slate-800">{log.userName}</span>
-                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-[11px] font-medium text-slate-500 max-w-xs">{log.details}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => handleDeleteLog(log.id)} className="text-slate-200 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                  </td>
+                  <td className="px-6 py-4"><Badge color="blue">{log.action}</Badge></td>
+                  <td className="px-6 py-4 font-bold">{log.userName}</td>
+                  <td className="px-6 py-4 text-xs text-slate-500">{log.details}</td>
+                  <td className="px-6 py-4 text-right"><button onClick={() => handleDeleteLog(log.id)} className="text-slate-200 hover:text-red-600"><Trash2 size={16} /></button></td>
                 </tr>
               ))}
-              {filteredLogs.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-400 font-medium italic">Diagnostic log is clear.</td></tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -963,23 +826,21 @@ export const DonorSearch = () => {
     if (!user) return;
     try {
       await requestDirectoryAccess(user);
-      alert("Access request sent to administrator. You will be notified once verified.");
+      alert("Access request sent to administrator successfully.");
     } catch (e) {
       alert("Failed to send request.");
     }
   };
 
-  if (loading) return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Scanning donor records...</div>;
+  if (loading) return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Scanning records...</div>;
 
   if (!hasAccess) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-        <div className="p-6 bg-red-50 rounded-[3rem] text-red-600 shadow-inner">
-          <Lock size={64} />
-        </div>
+        <div className="p-6 bg-red-50 rounded-[3rem] text-red-600 shadow-inner"><Lock size={64} /></div>
         <div className="max-w-md">
           <h2 className="text-3xl font-black text-slate-900 tracking-tighter mb-4">Restricted Directory</h2>
-          <p className="text-slate-500 font-medium mb-8">Access to the full donor directory requires administrative authorization to ensure privacy and safety.</p>
+          <p className="text-slate-500 font-medium mb-8">Access to full donor records requires administrative authorization for safety.</p>
           <Button onClick={handleRequestAccess}>Request Directory Access</Button>
         </div>
       </div>
@@ -991,20 +852,11 @@ export const DonorSearch = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Donor Directory</h1>
-          <p className="text-slate-500 font-medium">Verified life-savers across the network.</p>
+          <p className="text-slate-500 font-medium">Verified donors across the global registry.</p>
         </div>
         <div className="flex gap-4 w-full sm:w-auto">
-          <Input 
-            placeholder="Search name or city..." 
-            className="w-full sm:w-64" 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Select 
-            value={bloodFilter} 
-            onChange={(e) => setBloodFilter(e.target.value)}
-            className="w-full sm:w-32"
-          >
+          <Input placeholder="Search name or location..." className="w-full sm:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Select value={bloodFilter} onChange={(e) => setBloodFilter(e.target.value)} className="w-full sm:w-32">
             <option value="ALL">All Groups</option>
             {Object.values(BloodGroup).map(bg => <option key={bg} value={bg}>{bg}</option>)}
           </Select>
@@ -1016,12 +868,11 @@ export const DonorSearch = () => {
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-900 text-[10px] text-white uppercase tracking-[0.2em] font-black">
               <tr>
-                <th className="px-6 py-5">Donor Profile</th>
+                <th className="px-6 py-5">Hero Name</th>
                 <th className="px-6 py-5">Blood Group</th>
                 <th className="px-6 py-5">Location</th>
                 <th className="px-6 py-5">Phone</th>
-                <th className="px-6 py-5">Last Donation</th>
-                <th className="px-6 py-5 text-right">Message</th>
+                <th className="px-6 py-5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1029,45 +880,24 @@ export const DonorSearch = () => {
                 <tr key={u.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
                      <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 group-hover:scale-110 transition-transform">
+                       <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border flex-shrink-0 group-hover:scale-110 transition-transform">
                          {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <Users className="p-2 text-slate-300" />}
                        </div>
-                       <div>
-                         <p className="font-bold text-slate-900">{u.name}</p>
-                         <p className="text-[10px] text-slate-400 font-medium">{u.email}</p>
-                       </div>
+                       <p className="font-bold text-slate-900">{u.name}</p>
                      </div>
                   </td>
                   <td className="px-6 py-4"><Badge color="red">{u.bloodGroup}</Badge></td>
-                  <td className="px-6 py-4">
-                     <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                       <MapPin size={12} className="text-slate-300" />
-                       {u.location}
-                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <a href={`tel:${u.phone}`} className="text-red-600 font-bold hover:underline">
-                      {u.phone || 'N/A'}
-                    </a>
-                  </td>
-                  <td className="px-6 py-4">
-                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                       {u.lastDonationDate ? new Date(u.lastDonationDate).toLocaleDateString() : 'New Hero'}
-                     </span>
-                  </td>
+                  <td className="px-6 py-4 text-slate-600 font-medium">{u.location}</td>
+                  <td className="px-6 py-4"><a href={`tel:${u.phone}`} className="text-red-600 font-bold hover:underline">{u.phone || 'N/A'}</a></td>
                   <td className="px-6 py-4 text-right">
-                    <Link 
-                      to="/support" 
-                      className="inline-flex items-center justify-center p-2.5 bg-slate-100 text-slate-400 group-hover:bg-red-600 group-hover:text-white rounded-xl transition-all shadow-sm"
-                      title="Send Message"
-                    >
+                    <Link to="/support" className="inline-flex items-center justify-center p-2.5 bg-slate-100 text-slate-400 group-hover:bg-red-600 group-hover:text-white rounded-xl transition-all shadow-sm">
                       <ArrowRight size={16} />
                     </Link>
                   </td>
                 </tr>
               ))}
               {filteredUsers.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-20 text-center text-slate-400 font-medium italic">No donors found in the registry.</td></tr>
+                <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-400 italic">No donors match your search query.</td></tr>
               )}
             </tbody>
           </table>
@@ -1081,7 +911,6 @@ export const DeletedRecords = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [donations, setDonations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     Promise.all([getDeletedUsers(), getDeletedDonations()]).then(([u, d]) => {
       setUsers(u);
@@ -1089,79 +918,42 @@ export const DeletedRecords = () => {
       setLoading(false);
     });
   }, []);
-
-  if (loading) return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Accessing historical vault...</div>;
-
+  if (loading) return <div className="p-20 text-center text-slate-400 font-black uppercase animate-pulse">Loading Archives...</div>;
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tighter">System Archives</h1>
-        <p className="text-slate-500 font-medium">Historical trace of purged records and security actions.</p>
-      </div>
-
+      <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Historical Vault</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="space-y-6">
-          <h3 className="font-black text-xs text-red-600 uppercase tracking-widest flex items-center gap-2">
-            <Users size={16} /> Purged Identity Matrix
-          </h3>
+          <h3 className="font-black text-xs text-red-600 uppercase tracking-widest flex items-center gap-2"><Users size={16} /> Purged Identity Matrix</h3>
           <Card className="overflow-hidden border-0 shadow-lg">
              <div className="overflow-x-auto">
                <table className="w-full text-xs text-left">
                  <thead className="bg-slate-900 text-white font-black uppercase tracking-widest">
-                   <tr>
-                     <th className="px-4 py-4">Identity</th>
-                     <th className="px-4 py-4">Purge Date</th>
-                     <th className="px-4 py-4">Actor</th>
-                   </tr>
+                   <tr><th className="px-4 py-4">Identity</th><th className="px-4 py-4">Date</th><th className="px-4 py-4">Actor</th></tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
                    {users.map((u, i) => (
-                     <tr key={i} className="hover:bg-slate-50">
-                       <td className="px-4 py-3">
-                         <p className="font-bold text-slate-900">{u.name}</p>
-                         <p className="text-[10px] text-slate-400">{u.email}</p>
-                       </td>
-                       <td className="px-4 py-3 font-mono text-slate-400">{new Date(u.deletedAt).toLocaleDateString()}</td>
-                       <td className="px-4 py-3 font-bold text-red-600">{u.deletedBy}</td>
-                     </tr>
+                     <tr key={i} className="hover:bg-slate-50"><td className="px-4 py-3"><p className="font-bold">{u.name}</p></td><td className="px-4 py-3 text-slate-400">{new Date(u.deletedAt).toLocaleDateString()}</td><td className="px-4 py-3 font-bold text-red-600">{u.deletedBy}</td></tr>
                    ))}
-                   {users.length === 0 && (
-                     <tr><td colSpan={3} className="px-4 py-10 text-center italic text-slate-400">Archive is empty.</td></tr>
-                   )}
+                   {users.length === 0 && <tr><td colSpan={3} className="px-4 py-10 text-center italic text-slate-400">Empty.</td></tr>}
                  </tbody>
                </table>
              </div>
           </Card>
         </section>
-
         <section className="space-y-6">
-          <h3 className="font-black text-xs text-orange-600 uppercase tracking-widest flex items-center gap-2">
-            <Droplet size={16} /> Voided Transaction Log
-          </h3>
+          <h3 className="font-black text-xs text-orange-600 uppercase tracking-widest flex items-center gap-2"><Droplet size={16} /> Voided Ledger</h3>
           <Card className="overflow-hidden border-0 shadow-lg">
              <div className="overflow-x-auto">
                <table className="w-full text-xs text-left">
                  <thead className="bg-slate-900 text-white font-black uppercase tracking-widest">
-                   <tr>
-                     <th className="px-4 py-4">Donation</th>
-                     <th className="px-4 py-4">Void Date</th>
-                     <th className="px-4 py-4">Actor</th>
-                   </tr>
+                   <tr><th className="px-4 py-4">Entry</th><th className="px-4 py-4">Date</th><th className="px-4 py-4">Actor</th></tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
                    {donations.map((d, i) => (
-                     <tr key={i} className="hover:bg-slate-50">
-                       <td className="px-4 py-3">
-                         <p className="font-bold text-slate-900">{d.userName} ({d.units}ml)</p>
-                         <p className="text-[10px] text-slate-400">{d.location}</p>
-                       </td>
-                       <td className="px-4 py-3 font-mono text-slate-400">{new Date(d.deletedAt).toLocaleDateString()}</td>
-                       <td className="px-4 py-3 font-bold text-orange-600">{d.deletedBy}</td>
-                     </tr>
+                     <tr key={i} className="hover:bg-slate-50"><td className="px-4 py-3"><p className="font-bold">{d.userName}</p></td><td className="px-4 py-3 text-slate-400">{new Date(d.deletedAt).toLocaleDateString()}</td><td className="px-4 py-3 font-bold text-orange-600">{d.deletedBy}</td></tr>
                    ))}
-                    {donations.length === 0 && (
-                     <tr><td colSpan={3} className="px-4 py-10 text-center italic text-slate-400">No voided transactions.</td></tr>
-                   )}
+                   {donations.length === 0 && <tr><td colSpan={3} className="px-4 py-10 text-center italic text-slate-400">Empty.</td></tr>}
                  </tbody>
                </table>
              </div>

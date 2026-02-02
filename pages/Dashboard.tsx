@@ -28,10 +28,12 @@ export const Dashboard = () => {
       setAllUsers(u);
       
       if (user?.role === UserRole.ADMIN || user?.role === UserRole.EDITOR) {
+        // Combined Pending Logic: Access + Donations
         const accessReqs = u.filter(usr => usr.directoryAccessRequested || usr.supportAccessRequested)
           .map(usr => ({ ...usr, type: 'ACCESS' }));
         const donationReqs = d.filter(don => don.status === DonationStatus.PENDING)
           .map(don => ({ ...don, type: 'DONATION' }));
+        
         setPendingItems([...accessReqs, ...donationReqs]);
       }
     } catch (err) {
@@ -57,8 +59,7 @@ export const Dashboard = () => {
       alert(`Request ${approve ? 'Approved' : 'Rejected'} successfully.`);
       fetchData();
     } catch (e) {
-      console.error(e);
-      alert("Action failed. Please check permissions.");
+      alert("Action failed.");
     }
   };
 
@@ -69,17 +70,19 @@ export const Dashboard = () => {
     setInsightLoading(false);
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Loading intelligence hub...</div>;
+  if (loading) return <div className="p-10 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Initializing Hub...</div>;
 
-  const totalUnits = donations.filter(d => d.status === DonationStatus.COMPLETED).reduce((a, b) => a + b.units, 0);
-  const completedCounts = donations.filter(d => d.status === DonationStatus.COMPLETED)
-    .reduce((acc, curr) => {
-      acc[curr.userId] = (acc[curr.userId] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+  const completedDonations = donations.filter(d => d.status === DonationStatus.COMPLETED);
+  const totalUnits = completedDonations.reduce((a, b) => a + b.units, 0);
+  
+  // Calculate specific donation counts per user
+  const donationCounts = completedDonations.reduce((acc, curr) => {
+    acc[curr.userId] = (acc[curr.userId] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const topDonor = [...allUsers].sort((a, b) => (completedCounts[b.id] || 0) - (completedCounts[a.id] || 0))[0];
-  const topDonorCount = completedCounts[topDonor?.id] || 0;
+  const topDonor = [...allUsers].sort((a, b) => (donationCounts[b.id] || 0) - (donationCounts[a.id] || 0))[0];
+  const topDonorCount = donationCounts[topDonor?.id] || 0;
 
   const isAdmin = user?.role === UserRole.ADMIN || user?.role === UserRole.EDITOR;
 
@@ -88,17 +91,17 @@ export const Dashboard = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-1">Intelligence Hub</h1>
-          <p className="text-slate-500 font-medium">Monitoring blood inventory and lifecycle safety.</p>
+          <p className="text-slate-500 font-medium">Monitoring donor engagement and inventory safety.</p>
         </div>
         <Button onClick={handleGenerateInsight} isLoading={insightLoading} variant="secondary" className="rounded-2xl px-8 shadow-xl">
-          <Sparkles className="w-5 h-5 mr-3 text-yellow-400 fill-current" /> AI Analysis
+          <Sparkles className="w-5 h-5 mr-3 text-yellow-400 fill-current" /> AI Analytics
         </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Global Volume" value={`${totalUnits}ml`} icon={Droplet} color="text-red-600" bg="bg-red-50" />
+        <StatCard title="Total Volume" value={`${totalUnits}ml`} icon={Droplet} color="text-red-600" bg="bg-red-50" />
         <StatCard title="Active Heroes" value={allUsers.length} icon={Users} color="text-blue-600" bg="bg-blue-50" />
-        <StatCard title="Fulfilled" value={donations.filter(d => d.status === DonationStatus.COMPLETED).length} icon={CheckCircle} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="Completed" value={completedDonations.length} icon={CheckCircle} color="text-green-600" bg="bg-green-50" />
         <StatCard title="Scheduled" value={donations.filter(d => d.status === DonationStatus.PENDING).length} icon={Clock} color="text-orange-600" bg="bg-orange-50" />
       </div>
 
@@ -111,7 +114,7 @@ export const Dashboard = () => {
                </div>
                <div className="relative z-10">
                  <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-3">
-                   <Sparkles className="text-yellow-400" size={24} /> Gemini Analysis Report
+                   <Sparkles className="text-yellow-400" size={24} /> AI Analysis Report
                  </h3>
                  <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line bg-white/5 p-6 rounded-3xl border border-white/10">
                    {insight}
@@ -174,8 +177,8 @@ export const Dashboard = () => {
                   <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{topDonor?.location}</span>
                 </div>
                 <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Total Donations</p>
-                   <p className="text-3xl font-black text-yellow-500">{topDonorCount} Times</p>
+                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Times Donated</p>
+                   <p className="text-3xl font-black text-yellow-500">{topDonorCount}</p>
                 </div>
               </div>
             </div>
@@ -232,7 +235,7 @@ export const Dashboard = () => {
                 {pendingItems.length === 0 && (
                   <div className="text-center py-12 flex flex-col items-center opacity-30">
                     <CheckCircle size={48} className="mb-3" />
-                    <p className="text-xs font-black uppercase tracking-widest">Everything is up to date</p>
+                    <p className="text-xs font-black uppercase tracking-widest">Everything is clean</p>
                   </div>
                 )}
               </div>

@@ -11,7 +11,8 @@ import {
   getUsers 
 } from '../services/api';
 import { Card, Button, Input, Badge } from '../components/UI';
-import { LifeBuoy, Lock, BookOpen, MessageSquare, PhoneCall, HelpCircle, CheckCircle, Send, ArrowLeft, Search, User as UserIcon, AlertCircle } from 'lucide-react';
+// Fix: Added ArrowRight to lucide-react imports to resolve reference error on line 257
+import { LifeBuoy, Lock, BookOpen, MessageSquare, PhoneCall, HelpCircle, CheckCircle, Send, ArrowLeft, Search, User as UserIcon, AlertCircle, ArrowRight } from 'lucide-react';
 import { ChatMessage, UserRole, User } from '../types';
 import clsx from 'clsx';
 
@@ -44,7 +45,8 @@ export const SupportCenter = () => {
       const unsubscribeUnread = subscribeToAllIncomingMessages(user.id, (msgs) => {
         const counts: Record<string, number> = {};
         msgs.forEach(m => {
-          counts[m.senderId] = (counts[m.senderId] || 0) + 1;
+          const key = m.roomId.startsWith('SUPPORT_') ? 'SYSTEM' : m.senderId;
+          counts[key] = (counts[key] || 0) + 1;
         });
         setUnreadCounts(counts);
       }, (err) => {
@@ -62,7 +64,7 @@ export const SupportCenter = () => {
 
     const handleError = (err: any) => {
       if (err.code === 'permission-denied') {
-        setPermissionError("Access denied by security policy. Please check Firebase rules or request authorization.");
+        setPermissionError("Access denied by security policy. Verification required.");
       }
     };
 
@@ -78,7 +80,10 @@ export const SupportCenter = () => {
     } else if (activeView === 'private-chat' && selectedRecipient) {
       const roomId = [user.id, selectedRecipient.id].sort().join('_');
       markMessagesAsRead(roomId, user.id).catch(() => {});
-      unsubscribe = subscribeToRoomMessages(roomId, setMessages, handleError);
+      unsubscribe = subscribeToRoomMessages(roomId, (msgs) => {
+        setMessages(msgs);
+        // Instant update handled by state setter in callback
+      }, handleError);
     }
 
     return () => unsubscribe();
@@ -96,7 +101,7 @@ export const SupportCenter = () => {
     try {
       await requestSupportAccess(user);
       setHasRequested(true);
-      alert("Support access request sent to Admin.");
+      alert("Support access request sent to administrator.");
     } catch (e) {
       alert("Failed to send request.");
     } finally {
@@ -134,11 +139,7 @@ export const SupportCenter = () => {
       await sendMessage(msg);
       setNewMessage('');
     } catch (e: any) {
-      if (e.code === 'permission-denied') {
-        alert("You don't have permission to send messages. Please check Firebase rules.");
-      } else {
-        alert("An error occurred while sending the message.");
-      }
+      alert("An error occurred while sending the message.");
     } finally {
       setIsSending(false);
     }
@@ -182,12 +183,6 @@ export const SupportCenter = () => {
                 </span>
               </div>
             ))}
-            {!permissionError && messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50">
-                <MessageSquare size={48} className="mb-4" />
-                <p className="font-bold text-sm">Conversation history is empty.</p>
-              </div>
-            )}
             <div ref={chatEndRef} />
          </div>
          
@@ -196,7 +191,7 @@ export const SupportCenter = () => {
               type="text" 
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message here..."
+              placeholder="Type your message..."
               className="flex-1 bg-slate-50 border-0 rounded-2xl px-5 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 transition-all outline-none"
               disabled={isSending || !!permissionError}
             />
@@ -212,19 +207,13 @@ export const SupportCenter = () => {
     </div>
   );
 
-  if (activeView === 'system-chat') {
-    return renderChat("Live System Support", MessageSquare);
-  }
-
-  if (activeView === 'private-chat' && selectedRecipient) {
-    return renderChat(`Chat with ${selectedRecipient.name}`, UserIcon);
-  }
+  if (activeView === 'system-chat') return renderChat("Live System Support", MessageSquare);
+  if (activeView === 'private-chat' && selectedRecipient) return renderChat(`Chat with ${selectedRecipient.name}`, UserIcon);
 
   if (activeView === 'user-list') {
     const filteredUsers = allUsers.filter(u => 
       u.id !== user?.id && 
-      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-       u.bloodGroup.toLowerCase().includes(searchQuery.toLowerCase()))
+      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.bloodGroup.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     return (
@@ -244,7 +233,7 @@ export const SupportCenter = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search by name or blood group..."
+              placeholder="Search hero..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-6 py-4 bg-slate-50 border-0 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
@@ -253,11 +242,7 @@ export const SupportCenter = () => {
 
           <div className="flex-1 overflow-y-auto space-y-2 pr-2">
             {filteredUsers.map(u => (
-              <div 
-                key={u.id} 
-                onClick={() => { setSelectedRecipient(u); setActiveView('private-chat'); }}
-                className="flex items-center justify-between p-4 bg-slate-50 hover:bg-blue-50 hover:shadow-md rounded-2xl cursor-pointer transition-all border border-transparent hover:border-blue-100 group"
-              >
+              <div key={u.id} onClick={() => { setSelectedRecipient(u); setActiveView('private-chat'); }} className="flex items-center justify-between p-4 bg-slate-50 hover:bg-blue-50 hover:shadow-md rounded-2xl cursor-pointer transition-all border border-transparent hover:border-blue-100 group">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center border-2 border-white shadow-sm overflow-hidden group-hover:scale-105 transition-transform">
                     {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <UserIcon size={20} className="text-slate-300" />}
@@ -265,18 +250,12 @@ export const SupportCenter = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-slate-900">{u.name}</p>
-                      {unreadCounts[u.id] > 0 && (
-                        <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce shadow-sm">
-                          {unreadCounts[u.id]}
-                        </span>
-                      )}
+                      {unreadCounts[u.id] > 0 && <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce shadow-sm">{unreadCounts[u.id]}</span>}
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{u.role}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{u.bloodGroup}</p>
                   </div>
                 </div>
-                <Badge color="red" className="font-black text-[10px] tracking-widest uppercase">
-                  {u.bloodGroup}
-                </Badge>
+                <ArrowRight className="text-slate-300 group-hover:text-blue-600" size={20} />
               </div>
             ))}
           </div>
@@ -290,56 +269,30 @@ export const SupportCenter = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center gap-3">
-        <div className="p-3 bg-blue-50 rounded-2xl">
-          <LifeBuoy className="text-blue-600" size={24} />
-        </div>
+        <div className="p-3 bg-blue-50 rounded-2xl"><LifeBuoy className="text-blue-600" size={24} /></div>
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Support & Resource Center</h1>
-          <p className="text-sm text-slate-500 font-medium">Chat with donors or administrators for assistance.</p>
+          <p className="text-sm text-slate-500 font-medium">Connect with verified donors or system administration.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div onClick={() => setActiveView('user-list')}>
-          <SupportLinkCard 
-            icon={BookOpen} 
-            title="Donor Messenger" 
-            description="Start a private conversation with any registered donor."
-            color="blue"
-            badge={unreadTotal}
-          />
+        <div onClick={() => setActiveView('user-list')} className="cursor-pointer">
+          <SupportLinkCard icon={BookOpen} title="Donor Messenger" description="Private chat with registered donors." color="blue" badge={unreadTotal} />
         </div>
-        <div onClick={() => setActiveView('system-chat')}>
-          <SupportLinkCard 
-            icon={MessageSquare} 
-            title="System Support" 
-            description="Chat directly with the system administration team."
-            color="green"
-            badge={unreadCounts['SYSTEM'] || 0}
-          />
+        <div onClick={() => setActiveView('system-chat')} className="cursor-pointer">
+          <SupportLinkCard icon={MessageSquare} title="System Support" description="Direct communication with staff." color="green" badge={unreadCounts['SYSTEM'] || 0} />
         </div>
-        <SupportLinkCard 
-          icon={PhoneCall} 
-          title="Emergency Contact" 
-          description="Access critical contact numbers for urgent assistance."
-          color="red"
-        />
+        <SupportLinkCard icon={PhoneCall} title="Emergency Help" description="Critical emergency contact list." color="red" />
       </div>
 
       <Card className="p-8 border-0 shadow-lg">
-        <h3 className="font-bold text-xl mb-6 flex items-center gap-2">
-          <HelpCircle className="text-blue-600" size={24} /> 
-          Frequently Asked Questions (FAQ)
-        </h3>
+        <h3 className="font-bold text-xl mb-6 flex items-center gap-2"><HelpCircle className="text-blue-600" size={24} /> Frequently Asked Questions</h3>
         <div className="space-y-6">
-          <FAQItem 
-            q="How do I update my donation record?" 
-            a="After your donation is completed, the administrator will verify and finalize the record in the global registry." 
-          />
-          <FAQItem 
-            q="Who can see my contact information?" 
-            a="Only administrators and authorized donors with specific directory permissions can view your phone number." 
-          />
+          <div className="border-b border-slate-100 pb-4">
+            <p className="font-bold text-slate-800 mb-2 flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> How do I update my donation status?</p>
+            <p className="text-xs text-slate-500 font-medium pl-6">After your donation request, an administrator will verify the record to mark it as completed.</p>
+          </div>
         </div>
       </Card>
     </div>
@@ -347,32 +300,13 @@ export const SupportCenter = () => {
 };
 
 const SupportLinkCard = ({ icon: Icon, title, description, color, badge }: any) => {
-  const colors: any = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-green-50 text-green-600",
-    red: "bg-red-50 text-red-600"
-  };
+  const colors: any = { blue: "bg-blue-50 text-blue-600", green: "bg-green-50 text-green-600", red: "bg-red-50 text-red-600" };
   return (
-    <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-0 shadow-md group relative overflow-hidden">
-      {badge > 0 && (
-        <span className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg border-2 border-white animate-pulse">
-          {badge}
-        </span>
-      )}
-      <div className={clsx("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform", colors[color])}>
-        <Icon size={24} />
-      </div>
+    <Card className="p-6 hover:shadow-xl transition-all border-0 shadow-md group relative overflow-hidden h-full">
+      {badge > 0 && <span className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg border-2 border-white animate-pulse">{badge}</span>}
+      <div className={clsx("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform", colors[color])}><Icon size={24} /></div>
       <h4 className="font-bold text-slate-900 mb-2">{title}</h4>
       <p className="text-xs text-slate-500 font-medium leading-relaxed">{description}</p>
     </Card>
   );
 };
-
-const FAQItem = ({ q, a }: { q: string, a: string }) => (
-  <div className="border-b border-slate-100 pb-4">
-    <p className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-      <CheckCircle size={16} className="text-green-500" /> {q}
-    </p>
-    <p className="text-xs text-slate-500 font-medium leading-relaxed pl-6">{a}</p>
-  </div>
-);
