@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
-export function Layout({ children }: { children?: React.ReactNode }) {
+export const Layout = ({ children }: { children?: React.ReactNode }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -32,7 +32,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   useEffect(() => {
     getAppPermissions().then(setPerms);
     
-    // Check for all pending items if Admin or Editor
     if (user?.role === UserRole.ADMIN || user?.role === UserRole.EDITOR) {
       const fetchCounts = async () => {
         try {
@@ -47,7 +46,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       fetchCounts();
     }
 
-    // Subscribe to unread messages for badge
     if (user) {
       const unsubscribeMessages = subscribeToAllIncomingMessages(user.id, (msgs) => {
         setUnreadMsgCount(msgs.length);
@@ -77,7 +75,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
         <span className="text-sm">{label}</span>
       </div>
       {badge !== undefined && badge > 0 && (
-        <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+        <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
           {badge}
         </span>
       )}
@@ -121,11 +119,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
             {currentRolePerms?.sidebar.dashboard && <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />}
             {currentRolePerms?.sidebar.profile && <NavItem to="/profile" icon={UserCircle} label="My Profile" />}
             {currentRolePerms?.sidebar.donors && <NavItem to="/donors" icon={Search} label="Donor Search" />}
-            
-            {currentRolePerms?.sidebar.history && (
-              <NavItem to="/my-donations" icon={History} label="Donation History" />
-            )}
-            
+            {currentRolePerms?.sidebar.history && <NavItem to="/my-donations" icon={History} label="Donation History" />}
             {canSeeSupport && currentRolePerms?.sidebar.supportCenter && (
               <NavItem to="/support" icon={LifeBuoy} label="Support Center" badge={unreadMsgCount} />
             )}
@@ -139,14 +133,12 @@ export function Layout({ children }: { children?: React.ReactNode }) {
                 {currentRolePerms?.sidebar.manageDonations && (
                   <NavItem to="/manage-donations" icon={Droplet} label="All Donations" badge={notificationCount} />
                 )}
-                
                 {isAdmin && (
                   <>
                     <NavItem to="/notifications" icon={Bell} label="Notification Center" badge={notificationCount} />
                     <NavItem to="/deleted-users" icon={Trash2} label="System Archives" />
                   </>
                 )}
-                
                 {currentRolePerms?.sidebar.logs && <NavItem to="/logs" icon={FileText} label="Activity Logs" />}
               </>
             )}
@@ -182,18 +174,6 @@ export function Layout({ children }: { children?: React.ReactNode }) {
             <span className="font-black text-slate-900 tracking-tighter text-xl">BloodLink</span>
           </div>
           <div className="flex items-center gap-3">
-             {unreadMsgCount > 0 && (
-               <Link to="/support" className="p-2 text-blue-600 relative">
-                 <LifeBuoy size={22} />
-                 <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-blue-600 rounded-full animate-pulse border-2 border-white"></span>
-               </Link>
-             )}
-             {(isAdmin || isEditor) && notificationCount > 0 && (
-                <Link to="/manage-donations" className="p-2 text-red-600 relative">
-                   <Bell size={22} />
-                   <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse border-2 border-white"></span>
-                </Link>
-             )}
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                <Menu size={24} className="text-slate-700" />
              </button>

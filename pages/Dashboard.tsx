@@ -28,12 +28,10 @@ export const Dashboard = () => {
       setAllUsers(u);
       
       if (user?.role === UserRole.ADMIN || user?.role === UserRole.EDITOR) {
-        // Unified Pending Requests: Access Requests + Pending Donations
         const accessReqs = u.filter(usr => usr.directoryAccessRequested || usr.supportAccessRequested)
           .map(usr => ({ ...usr, type: 'ACCESS' }));
         const donationReqs = d.filter(don => don.status === DonationStatus.PENDING)
           .map(don => ({ ...don, type: 'DONATION' }));
-        
         setPendingItems([...accessReqs, ...donationReqs]);
       }
     } catch (err) {
@@ -74,8 +72,6 @@ export const Dashboard = () => {
   if (loading) return <div className="p-10 text-center text-slate-400 font-black uppercase tracking-widest animate-pulse">Loading intelligence hub...</div>;
 
   const totalUnits = donations.filter(d => d.status === DonationStatus.COMPLETED).reduce((a, b) => a + b.units, 0);
-  
-  // Calculate completed counts for all users
   const completedCounts = donations.filter(d => d.status === DonationStatus.COMPLETED)
     .reduce((acc, curr) => {
       acc[curr.userId] = (acc[curr.userId] || 0) + 1;
@@ -159,7 +155,6 @@ export const Dashboard = () => {
                 </div>
                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Top Donor Achievement</h3>
               </div>
-              
               <div className="text-center py-6">
                 <div className="relative inline-block mb-6">
                   <div className="w-28 h-28 bg-gradient-to-tr from-slate-800 to-slate-700 rounded-[2.5rem] mx-auto flex items-center justify-center text-4xl font-black border-4 border-slate-800 shadow-2xl group-hover:rotate-6 transition-transform">
@@ -173,13 +168,11 @@ export const Dashboard = () => {
                     <Sparkles size={16} />
                   </div>
                 </div>
-                
                 <p className="text-2xl font-black tracking-tighter mb-1">{topDonor?.name || 'Searching...'}</p>
                 <div className="flex items-center justify-center gap-2 mb-4">
                   <Badge color="red" className="bg-red-500/10 text-red-400 border border-red-500/20">{topDonor?.bloodGroup}</Badge>
                   <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{topDonor?.location}</span>
                 </div>
-
                 <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Total Donations</p>
                    <p className="text-3xl font-black text-yellow-500">{topDonorCount} Times</p>
@@ -194,7 +187,7 @@ export const Dashboard = () => {
                 <h3 className="font-black text-slate-900 text-xs uppercase tracking-widest flex items-center gap-3">
                   <BellRing className="text-red-600" size={20} /> Notification Center
                 </h3>
-                {pendingItems.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingItems.length}</span>}
+                {pendingItems.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse">{pendingItems.length}</span>}
               </div>
               
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -209,7 +202,7 @@ export const Dashboard = () => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-900 truncate">
+                        <p className="text-sm font-bold text-slate-900 truncate">
                           {item.type === 'DONATION' ? item.userName : item.name}
                         </p>
                         <div className="flex items-center gap-2">
@@ -223,13 +216,13 @@ export const Dashboard = () => {
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleAction(item.id, item.type, item.directoryAccessRequested ? 'directory' : 'support', true)}
-                        className="flex-1 bg-white border border-slate-200 p-2 rounded-xl text-green-600 hover:bg-green-600 hover:text-white transition-all flex justify-center"
+                        className="flex-1 bg-white border border-slate-200 p-2 rounded-xl text-green-600 hover:bg-green-600 hover:text-white transition-all flex justify-center shadow-sm"
                       >
                         <Check size={16} />
                       </button>
                       <button 
                         onClick={() => handleAction(item.id, item.type, item.directoryAccessRequested ? 'directory' : 'support', false)}
-                        className="flex-1 bg-white border border-slate-200 p-2 rounded-xl text-red-600 hover:bg-red-600 hover:text-white transition-all flex justify-center"
+                        className="flex-1 bg-white border border-slate-200 p-2 rounded-xl text-red-600 hover:bg-red-600 hover:text-white transition-all flex justify-center shadow-sm"
                       >
                         <X size={16} />
                       </button>

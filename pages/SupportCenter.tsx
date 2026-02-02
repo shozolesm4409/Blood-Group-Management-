@@ -279,22 +279,13 @@ export const SupportCenter = () => {
                 </Badge>
               </div>
             ))}
-            {allUsers.length === 0 && (
-              <div className="text-center py-20 text-slate-400">
-                <AlertCircle className="mx-auto mb-2 opacity-20" size={48} />
-                <p className="text-sm font-medium italic">Loading users list...</p>
-              </div>
-            )}
-            {allUsers.length > 0 && filteredUsers.length === 0 && (
-              <div className="text-center py-20 text-slate-400 font-medium">No donors found matching your search.</div>
-            )}
           </div>
         </Card>
       </div>
     );
   }
 
-  const unreadTotal = Object.values(unreadCounts).reduce((a: number, b: number) => a + b, 0);
+  const unreadTotal = Object.values(unreadCounts).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -362,9 +353,9 @@ const SupportLinkCard = ({ icon: Icon, title, description, color, badge }: any) 
     red: "bg-red-50 text-red-600"
   };
   return (
-    <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-0 shadow-md group relative">
+    <Card className="p-6 hover:shadow-xl transition-all cursor-pointer border-0 shadow-md group relative overflow-hidden">
       {badge > 0 && (
-        <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg border-2 border-white animate-pulse">
+        <span className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg border-2 border-white animate-pulse">
           {badge}
         </span>
       )}

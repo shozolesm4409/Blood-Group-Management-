@@ -216,7 +216,6 @@ export const UserManagement = () => {
 
       {activeTab === 'directory-access' && (
         <Card className="p-8 shadow-lg border-0 space-y-8">
-          {/* Outstanding Auth Requests Section */}
           {pendingRequestsCount > 0 && (
             <div className="bg-red-50/50 rounded-3xl p-6 border border-red-100">
                <h3 className="font-black text-[10px] text-red-600 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -308,7 +307,6 @@ export const UserManagement = () => {
         </Card>
       )}
 
-      {/* Render tabs based on active state */}
       {activeTab === 'users' && (
         <Card className="overflow-hidden border-0 shadow-lg">
           <div className="overflow-x-auto">
