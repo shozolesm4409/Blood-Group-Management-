@@ -14,7 +14,6 @@ export const MyDonations = () => {
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   
-  // Confirmation Modal State
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -47,10 +46,11 @@ export const MyDonations = () => {
         userBloodGroup: user.bloodGroup,
         donationDate: new Date().toISOString(),
         location: formData.get('location') as string,
-        units: 450, // Standard unit
+        units: 450, 
         notes: formData.get('notes') as string
       }, user);
       
+      alert("Donation request submitted successfully. Awaiting administrator verification.");
       setShowForm(false);
       await fetchHistory();
     } catch (err) {
@@ -66,6 +66,7 @@ export const MyDonations = () => {
     setIsDeleting(true);
     try {
       await deleteDonationRecord(deleteId, user);
+      alert("Record successfully removed from active history.");
       await fetchHistory();
       setDeleteId(null);
     } catch (err) {

@@ -5,7 +5,7 @@ import {
   requestSupportAccess, 
   sendMessage, 
   subscribeToRoomMessages, 
-  subscribeToAllSupportRooms,
+  subscribeToAllSupportRooms, 
   subscribeToAllIncomingMessages,
   markMessagesAsRead,
   getUsers 
@@ -21,7 +21,6 @@ export const SupportCenter = () => {
   const [hasRequested, setHasRequested] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   
-  // View states: 'hub', 'system-chat', 'user-list', 'private-chat'
   const [activeView, setActiveView] = useState<'hub' | 'system-chat' | 'user-list' | 'private-chat'>('hub');
   
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
@@ -31,7 +30,6 @@ export const SupportCenter = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSending, setIsSending] = useState(false);
   
-  // Map to store unread counts: senderId -> count
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -39,12 +37,10 @@ export const SupportCenter = () => {
   useEffect(() => {
     if (user?.supportAccessRequested) setHasRequested(true);
     if (user) {
-      // Gracefully handle user list fetching
       getUsers().then(users => {
         setAllUsers(users);
       }).catch(() => {});
       
-      // Global subscription to track unread counts for THIS user
       const unsubscribeUnread = subscribeToAllIncomingMessages(user.id, (msgs) => {
         const counts: Record<string, number> = {};
         msgs.forEach(m => {
@@ -52,15 +48,13 @@ export const SupportCenter = () => {
         });
         setUnreadCounts(counts);
       }, (err) => {
-        // Suppress unread count error UI
-        console.debug("Unread count subscription restricted");
+        console.debug("Unread count subscription restricted by rules");
       });
       
       return () => unsubscribeUnread();
     }
   }, [user]);
 
-  // Handle message subscriptions based on active view
   useEffect(() => {
     if (!user) return;
     setPermissionError(null);
@@ -68,8 +62,7 @@ export const SupportCenter = () => {
 
     const handleError = (err: any) => {
       if (err.code === 'permission-denied') {
-        // Only show UI error if it's a critical context
-        setPermissionError("Action restricted by system policy. You might not have permission to view these messages.");
+        setPermissionError("Access denied by security policy. Please check Firebase rules or request authorization.");
       }
     };
 
@@ -84,8 +77,7 @@ export const SupportCenter = () => {
       }
     } else if (activeView === 'private-chat' && selectedRecipient) {
       const roomId = [user.id, selectedRecipient.id].sort().join('_');
-      // Mark as read when entering
-      markMessagesAsRead(roomId, user.id);
+      markMessagesAsRead(roomId, user.id).catch(() => {});
       unsubscribe = subscribeToRoomMessages(roomId, setMessages, handleError);
     }
 
@@ -143,16 +135,15 @@ export const SupportCenter = () => {
       setNewMessage('');
     } catch (e: any) {
       if (e.code === 'permission-denied') {
-        alert("You do not have permission to post messages here.");
+        alert("You don't have permission to send messages. Please check Firebase rules.");
       } else {
-        alert("Message failed to send.");
+        alert("An error occurred while sending the message.");
       }
     } finally {
       setIsSending(false);
     }
   };
 
-  // Render Messaging UI Component
   const renderChat = (title: string, icon: any) => (
     <div className="h-[calc(100vh-140px)] flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex items-center justify-between">
@@ -194,7 +185,7 @@ export const SupportCenter = () => {
             {!permissionError && messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50">
                 <MessageSquare size={48} className="mb-4" />
-                <p className="font-bold text-sm">No messages yet.</p>
+                <p className="font-bold text-sm">Conversation history is empty.</p>
               </div>
             )}
             <div ref={chatEndRef} />
@@ -207,11 +198,11 @@ export const SupportCenter = () => {
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type your message here..."
               className="flex-1 bg-slate-50 border-0 rounded-2xl px-5 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500 transition-all outline-none"
-              disabled={isSending}
+              disabled={isSending || !!permissionError}
             />
             <button 
               type="submit" 
-              disabled={isSending || !newMessage.trim()}
+              disabled={isSending || !newMessage.trim() || !!permissionError}
               className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
             >
               <Send size={20} />
@@ -253,7 +244,7 @@ export const SupportCenter = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search users by name or blood group..."
+              placeholder="Search by name or blood group..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-6 py-4 bg-slate-50 border-0 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
@@ -291,17 +282,19 @@ export const SupportCenter = () => {
             {allUsers.length === 0 && (
               <div className="text-center py-20 text-slate-400">
                 <AlertCircle className="mx-auto mb-2 opacity-20" size={48} />
-                <p className="text-sm font-medium italic">Directory access restricted or loading...</p>
+                <p className="text-sm font-medium italic">Loading users list...</p>
               </div>
             )}
             {allUsers.length > 0 && filteredUsers.length === 0 && (
-              <div className="text-center py-20 text-slate-400 font-medium">No matches found.</div>
+              <div className="text-center py-20 text-slate-400 font-medium">No donors found matching your search.</div>
             )}
           </div>
         </Card>
       </div>
     );
   }
+
+  const unreadTotal = Object.values(unreadCounts).reduce((a: number, b: number) => a + b, 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -311,7 +304,7 @@ export const SupportCenter = () => {
         </div>
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Support & Resource Center</h1>
-          <p className="text-sm text-slate-500 font-medium">Connect with staff and donors.</p>
+          <p className="text-sm text-slate-500 font-medium">Chat with donors or administrators for assistance.</p>
         </div>
       </div>
 
@@ -319,24 +312,25 @@ export const SupportCenter = () => {
         <div onClick={() => setActiveView('user-list')}>
           <SupportLinkCard 
             icon={BookOpen} 
-            title="User Messenger" 
+            title="Donor Messenger" 
             description="Start a private conversation with any registered donor."
             color="blue"
-            badge={Object.values(unreadCounts).reduce((a, b) => a + b, 0)}
+            badge={unreadTotal}
           />
         </div>
         <div onClick={() => setActiveView('system-chat')}>
           <SupportLinkCard 
             icon={MessageSquare} 
-            title="Live Chat" 
-            description="Speak with our system administrators instantly."
+            title="System Support" 
+            description="Chat directly with the system administration team."
             color="green"
+            badge={unreadCounts['SYSTEM'] || 0}
           />
         </div>
         <SupportLinkCard 
           icon={PhoneCall} 
           title="Emergency Contact" 
-          description="Direct line for critical system issues."
+          description="Access critical contact numbers for urgent assistance."
           color="red"
         />
       </div>
@@ -344,16 +338,16 @@ export const SupportCenter = () => {
       <Card className="p-8 border-0 shadow-lg">
         <h3 className="font-bold text-xl mb-6 flex items-center gap-2">
           <HelpCircle className="text-blue-600" size={24} /> 
-          Frequently Asked Questions
+          Frequently Asked Questions (FAQ)
         </h3>
         <div className="space-y-6">
           <FAQItem 
-            q="How do I update my last donation date?" 
-            a="Your donation date is automatically updated by the Administrator once your donation record is marked as 'Completed'." 
+            q="How do I update my donation record?" 
+            a="After your donation is completed, the administrator will verify and finalize the record in the global registry." 
           />
           <FAQItem 
             q="Who can see my contact information?" 
-            a="Only Administrators and verified Editors with Directory Access can view your phone number and email for logistics purposes." 
+            a="Only administrators and authorized donors with specific directory permissions can view your phone number." 
           />
         </div>
       </Card>

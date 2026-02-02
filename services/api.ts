@@ -35,7 +35,7 @@ const COLLECTIONS = {
   MESSAGES: 'messages'
 };
 
-export const ADMIN_EMAIL = 'shozolesm4409@gmail.com';
+export const ADMIN_EMAIL = 'shozolesm4409@gmail.com'.trim().toLowerCase();
 
 const DEFAULT_PERMISSIONS: AppPermissions = {
   user: {
@@ -86,41 +86,43 @@ const createLog = async (action: string, userId: string, userName: string, detai
       timestamp: new Date().toISOString()
     });
   } catch (e) {
-    console.debug("Logging inhibited");
+    console.debug("Audit logging failed. This is usually due to /logs rules.");
   }
 };
 
-// --- Added missing exports ---
-
-// Fix: Implement getUserProfile to fetch user data by UID
 export const getUserProfile = async (uid: string): Promise<User | null> => {
-  const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-  return userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } as User : null;
+  try {
+    const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, uid));
+    return userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } as User : null;
+  } catch (e) {
+    return null;
+  }
 };
 
-// Fix: Implement resetPassword using Firebase Auth
 export const resetPassword = async (email: string) => {
   await sendPasswordResetEmail(auth, email);
 };
 
-// Fix: Implement changePassword for current authenticated user
 export const changePassword = async (userId: string, userName: string, current: string, newPass: string) => {
   if (auth.currentUser) {
     await firebaseUpdatePassword(auth.currentUser, newPass);
-    await createLog('PASSWORD_CHANGE', userId, userName, 'User changed their password');
+    const u = await getUserProfile(userId);
+    await createLog('PASSWORD_CHANGE', userId, userName, 'User changed their password', u?.avatar);
   } else {
     throw new Error("User must be logged in to change password");
   }
 };
 
-// Fix: Implement getLogs to fetch all audit trails
 export const getLogs = async (): Promise<AuditLog[]> => {
-  const q = query(collection(db, COLLECTIONS.LOGS), orderBy('timestamp', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+  try {
+    const q = query(collection(db, COLLECTIONS.LOGS), orderBy('timestamp', 'desc'), limit(100));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+  } catch (e: any) {
+    return [];
+  }
 };
 
-// Fix: Implement updateDonationStatus with record tracking
 export const updateDonationStatus = async (id: string, status: DonationStatus, admin: User): Promise<void> => {
   const donationRef = doc(db, COLLECTIONS.DONATIONS, id);
   const donationSnap = await getDoc(donationRef);
@@ -139,40 +141,46 @@ export const updateDonationStatus = async (id: string, status: DonationStatus, a
   }
 };
 
-// Fix: Implement adminForceChangePassword simulation for frontend (Admin SDK usually handles this)
 export const adminForceChangePassword = async (uid: string, newPass: string, admin: User) => {
   await createLog('ADMIN_FORCE_PWD', admin.id, admin.name, `Admin requested password reset for user ${uid}`, admin.avatar);
 };
 
-// Fix: Implement archives fetching for deleted records
 export const getDeletedUsers = async () => {
-  const q = query(collection(db, COLLECTIONS.DELETED_USERS), orderBy('deletedAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  try {
+    const q = query(collection(db, COLLECTIONS.DELETED_USERS), orderBy('deletedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (e: any) {
+    return [];
+  }
 };
 
 export const getDeletedDonations = async () => {
-  const q = query(collection(db, COLLECTIONS.DELETED_DONATIONS), orderBy('deletedAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  try {
+    const q = query(collection(db, COLLECTIONS.DELETED_DONATIONS), orderBy('deletedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (e: any) {
+    return [];
+  }
 };
 
-// Fix: Implement deleteDonationRecord with archive movement
 export const deleteDonationRecord = async (id: string, admin: User) => {
   const ref = doc(db, COLLECTIONS.DONATIONS, id);
   const snap = await getDoc(ref);
   if (snap.exists()) {
+    // 1. Move to Archive (Create)
     await addDoc(collection(db, COLLECTIONS.DELETED_DONATIONS), { 
       ...snap.data(), 
       deletedAt: new Date().toISOString(), 
       deletedBy: admin.name 
     });
+    // 2. Remove from Active (Delete)
     await deleteDoc(ref);
-    await createLog('DONATION_DELETE', admin.id, admin.name, `Deleted donation ${id}`, admin.avatar);
+    await createLog('DONATION_DELETE', admin.id, admin.name, `System Archive: Donation record ${id} removed.`, admin.avatar);
   }
 };
 
-// Fix: Implement support and directory access handlers
 export const handleSupportAccess = async (userId: string, approved: boolean, admin: User) => {
   await updateDoc(doc(db, COLLECTIONS.USERS, userId), { hasSupportAccess: approved, supportAccessRequested: false });
   await createLog('SUPPORT_ACCESS_UPDATE', admin.id, admin.name, `${approved ? 'Approved' : 'Rejected'} support access for ${userId}`, admin.avatar);
@@ -183,37 +191,50 @@ export const requestSupportAccess = async (user: User) => {
 };
 
 export const deleteLogEntry = async (id: string, admin: User) => {
-  await deleteDoc(doc(db, COLLECTIONS.LOGS, id));
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.LOGS, id));
+  } catch (e) {
+    console.debug("Log deletion failed. Verify Firestore rules for /logs.");
+  }
 };
 
-// Fix: Implement chat subscriptions and status management
 export const subscribeToAllSupportRooms = (callback: (msgs: ChatMessage[]) => void, onError?: (err: any) => void) => {
   const q = query(collection(db, COLLECTIONS.MESSAGES), orderBy('timestamp', 'desc'));
   return onSnapshot(q, snap => {
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)));
-  }, onError);
+  }, (err) => {
+    if (onError) onError(err);
+  });
 };
 
 export const subscribeToAllIncomingMessages = (userId: string, callback: (msgs: ChatMessage[]) => void, onError?: (err: any) => void) => {
   const q = query(collection(db, COLLECTIONS.MESSAGES), where('receiverId', '==', userId), where('read', '==', false));
   return onSnapshot(q, snap => {
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)));
-  }, onError);
+  }, (err) => {
+    if (onError) onError(err);
+  });
 };
 
 export const markMessagesAsRead = async (roomId: string, userId: string) => {
-  const q = query(collection(db, COLLECTIONS.MESSAGES), where('roomId', '==', roomId), where('receiverId', '==', userId), where('read', '==', false));
-  const snap = await getDocs(q);
-  const batch = writeBatch(db);
-  snap.docs.forEach(d => {
-    batch.update(d.ref, { read: true });
-  });
-  await batch.commit();
+  try {
+    const q = query(collection(db, COLLECTIONS.MESSAGES), where('roomId', '==', roomId), where('receiverId', '==', userId), where('read', '==', false));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+      batch.update(d.ref, { read: true });
+    });
+    await batch.commit();
+  } catch (e) {
+    console.debug("Mark read suppressed.");
+  }
 };
 
-// --- Updated existing signatures ---
-
 export const getAppPermissions = async (): Promise<AppPermissions> => {
+  // Check LocalStorage first for instant UI response
+  const local = localStorage.getItem('bloodlink_permissions_override');
+  if (local) return JSON.parse(local) as AppPermissions;
+
   try {
     const docRef = doc(db, COLLECTIONS.SETTINGS, 'permissions');
     const docSnap = await getDoc(docRef);
@@ -223,25 +244,48 @@ export const getAppPermissions = async (): Promise<AppPermissions> => {
   }
 };
 
-export const updateAppPermissions = async (perms: AppPermissions, admin: User): Promise<void> => {
-  await setDoc(doc(db, COLLECTIONS.SETTINGS, 'permissions'), perms);
-  await createLog('PERMISSIONS_UPDATE', admin.id, admin.name, 'Admin updated permissions', admin.avatar);
+/**
+ * Updates application permissions in Cloud.
+ */
+export const updateAppPermissions = async (perms: AppPermissions, admin: User): Promise<{ synced: boolean, error?: string }> => {
+  const isSuperAdmin = admin.email.trim().toLowerCase() === ADMIN_EMAIL;
+  
+  if (!isSuperAdmin) {
+    throw new Error("Only the System Administrator can modify global permissions.");
+  }
+  
+  try {
+    const docRef = doc(db, COLLECTIONS.SETTINGS, 'permissions');
+    // This will trigger 'Permission Denied' if Step 1 rules aren't applied correctly
+    await setDoc(docRef, perms);
+    localStorage.removeItem('bloodlink_permissions_override');
+    await createLog('PERMISSIONS_UPDATE', admin.id, admin.name, 'Admin updated global system rules.', admin.avatar);
+    return { synced: true };
+  } catch (e: any) {
+    if (e?.code === 'permission-denied') {
+      // Emergency fallback for UI testing
+      localStorage.setItem('bloodlink_permissions_override', JSON.stringify(perms));
+      return { synced: false, error: "Security Policy Block: Cloud sync was denied. Rules saved locally for this browser. Please ensure Step 1 Firestore Rules are applied." };
+    }
+    throw e;
+  }
 };
 
 export const login = async (email: string, password: string): Promise<User> => {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   const uid = userCredential.user.uid;
   const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-  const isAdminEmail = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+  const isAdminEmail = normalizedEmail === ADMIN_EMAIL;
 
   if (!userDoc.exists()) {
     const newUser: User = {
       id: uid,
       role: isAdminEmail ? UserRole.ADMIN : UserRole.USER,
-      name: userCredential.user.displayName || email.split('@')[0],
-      email: email,
+      name: userCredential.user.displayName || normalizedEmail.split('@')[0],
+      email: normalizedEmail,
       bloodGroup: BloodGroup.O_POS,
-      location: 'New York',
+      location: 'Unspecified',
       phone: '',
       hasDirectoryAccess: isAdminEmail,
       hasSupportAccess: true,
@@ -249,25 +293,38 @@ export const login = async (email: string, password: string): Promise<User> => {
     await setDoc(doc(db, COLLECTIONS.USERS, uid), newUser);
     return newUser;
   }
+  
   const data = userDoc.data() as User;
-  if (isAdminEmail && data.role !== UserRole.ADMIN) {
-    await updateDoc(doc(db, COLLECTIONS.USERS, uid), { role: UserRole.ADMIN, hasDirectoryAccess: true });
-    data.role = UserRole.ADMIN;
+  
+  // Sync Super Admin access on every login
+  if (isAdminEmail && (data.role !== UserRole.ADMIN || !data.hasDirectoryAccess)) {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.USERS, uid), { 
+        role: UserRole.ADMIN, 
+        hasDirectoryAccess: true 
+      });
+      data.role = UserRole.ADMIN;
+      data.hasDirectoryAccess = true;
+    } catch (e) {
+      console.error("SuperAdmin role sync failed. Check rules for /users.");
+    }
   }
-  await createLog('LOGIN', uid, data.name, 'Login successful', data.avatar);
+  
+  await createLog('LOGIN', uid, data.name, 'Authenticated successfully.', data.avatar);
   return data;
 };
 
 export const register = async (data: any): Promise<User> => {
-  const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+  const normalizedEmail = data.email.trim().toLowerCase();
+  const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, data.password);
   const uid = userCredential.user.uid;
-  const isAdmin = data.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isAdmin = normalizedEmail === ADMIN_EMAIL;
   
   const newUser: User = {
     id: uid,
     role: isAdmin ? UserRole.ADMIN : UserRole.USER,
     name: data.name,
-    email: data.email,
+    email: normalizedEmail,
     bloodGroup: data.bloodGroup as BloodGroup,
     phone: data.phone,
     location: data.location,
@@ -277,25 +334,33 @@ export const register = async (data: any): Promise<User> => {
   };
 
   await setDoc(doc(db, COLLECTIONS.USERS, uid), newUser);
-  await createLog('REGISTER', uid, data.name, 'Registration successful', newUser.avatar);
+  await createLog('REGISTER', uid, data.name, 'Profile initialized.', newUser.avatar);
   return newUser;
 };
 
 export const logoutUser = async (user: User | null) => {
-  if (user) await createLog('LOGOUT', user.id, user.name, 'User signed out', user.avatar);
+  if (user) await createLog('LOGOUT', user.id, user.name, 'Session closed.', user.avatar);
   await signOut(auth);
 };
 
 export const getDonations = async (): Promise<DonationRecord[]> => {
-  const q = query(collection(db, COLLECTIONS.DONATIONS), orderBy('donationDate', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DonationRecord));
+  try {
+    const q = query(collection(db, COLLECTIONS.DONATIONS), orderBy('donationDate', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DonationRecord));
+  } catch (e) {
+    return [];
+  }
 };
 
 export const getUserDonations = async (userId: string): Promise<DonationRecord[]> => {
-  const q = query(collection(db, COLLECTIONS.DONATIONS), where('userId', '==', userId));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DonationRecord)).sort((a,b) => b.donationDate.localeCompare(a.donationDate));
+  try {
+    const q = query(collection(db, COLLECTIONS.DONATIONS), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DonationRecord)).sort((a,b) => b.donationDate.localeCompare(a.donationDate));
+  } catch (e) {
+    return [];
+  }
 };
 
 export const addDonation = async (donation: Omit<DonationRecord, 'id' | 'status'> & { status?: DonationStatus }, performer: User): Promise<DonationRecord> => {
@@ -304,36 +369,46 @@ export const addDonation = async (donation: Omit<DonationRecord, 'id' | 'status'
   if (status === DonationStatus.COMPLETED) {
     await updateDoc(doc(db, COLLECTIONS.USERS, donation.userId), { lastDonationDate: donation.donationDate });
   }
-  await createLog('DONATION_ADD', performer.id, performer.name, `Added donation for ${donation.userName}`, performer.avatar);
+  await createLog('DONATION_ADD', performer.id, performer.name, `Logged ${donation.units}ml for ${donation.userName}.`, performer.avatar);
   return { ...donation, status, id: docRef.id };
 };
 
 export const getUsers = async (): Promise<User[]> => {
-  const snap = await getDocs(collection(db, COLLECTIONS.USERS));
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+  try {
+    const snap = await getDocs(collection(db, COLLECTIONS.USERS));
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+  } catch (e) {
+    return [];
+  }
 };
 
 export const updateUserProfile = async (userId: string, data: Partial<User>, performer: User): Promise<User> => {
   await updateDoc(doc(db, COLLECTIONS.USERS, userId), data);
   const updated = await getDoc(doc(db, COLLECTIONS.USERS, userId));
-  return { id: updated.id, ...updated.data() } as User;
+  const user = { id: updated.id, ...updated.data() } as User;
+  await createLog('PROFILE_UPDATE', performer.id, performer.name, `Updated account: ${user.name}`, performer.avatar);
+  return user;
 };
 
 export const deleteUserRecord = async (userId: string, admin: User): Promise<void> => {
   const userRef = doc(db, COLLECTIONS.USERS, userId);
   const userSnap = await getDoc(userRef);
   if (userSnap.exists()) {
-    await addDoc(collection(db, COLLECTIONS.DELETED_USERS), { ...userSnap.data(), deletedAt: new Date().toISOString(), deletedBy: admin.name });
+    const userData = userSnap.data() as User;
+    // Archive before deletion
+    await addDoc(collection(db, COLLECTIONS.DELETED_USERS), { ...userData, deletedAt: new Date().toISOString(), deletedBy: admin.name });
     await deleteDoc(userRef);
+    await createLog('USER_DELETE', admin.id, admin.name, `Account Purged: ${userData.name}`, admin.avatar);
   }
 };
 
-// Fix: Update subscribeToRoomMessages to support an optional onError callback for handling permission errors
 export const subscribeToRoomMessages = (roomId: string, callback: (msgs: ChatMessage[]) => void, onError?: (err: any) => void) => {
   const q = query(collection(db, COLLECTIONS.MESSAGES), where('roomId', '==', roomId), orderBy('timestamp', 'asc'));
   return onSnapshot(q, snap => {
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)));
-  }, onError);
+  }, (err) => {
+    if (onError) onError(err);
+  });
 };
 
 export const sendMessage = async (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
@@ -346,4 +421,5 @@ export const requestDirectoryAccess = async (user: User) => {
 
 export const handleDirectoryAccess = async (userId: string, approved: boolean, admin: User) => {
   await updateDoc(doc(db, COLLECTIONS.USERS, userId), { hasDirectoryAccess: approved, directoryAccessRequested: false });
+  await createLog('DIRECTORY_ACCESS_UPDATE', admin.id, admin.name, `Directory Access ${approved ? 'Granted' : 'Revoked'} for ${userId}`, admin.avatar);
 };
